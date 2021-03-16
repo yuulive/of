@@ -1,7 +1,7 @@
-use regmap::registers::*;
+use of::registers::*;
 
 fn main() {
-    unsafe { regmap::map_registers(); }
+    unsafe { of::map_registers(); }
 
     println!("rsp: {:x}", RSP.load());
     RSP.sub_assign(8);

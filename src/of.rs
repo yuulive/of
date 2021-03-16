@@ -1,4 +1,4 @@
-//! `regmap` allows users to memory-map x86_64 registers.
+//! `of` allows users to memory-map x86_64 registers.
 //!
 //! in many cases this will work, but for some uses (SIMD, or bulk memory instructions like
 //! `fxsave` and `rep movs`) will have unpredictable results; likely an application crash.
@@ -397,7 +397,7 @@ fn do_bitwise_flags(x: u64, y: u64, f: fn(u64, u64) -> u64) -> (u64, u64) {
 
 // why ignore `signum`? because this is registerd for two signals, and we do the same thing for
 // both.
-extern "C" fn regmap_impl(_signum: i32, siginfo_ptr: *mut siginfo_sigfault_t, ucontext_ptr: *mut c_void) {
+extern "C" fn of_impl(_signum: i32, siginfo_ptr: *mut siginfo_sigfault_t, ucontext_ptr: *mut c_void) {
     let siginfo_ptr = siginfo_ptr as *mut siginfo_sigfault_t;
     let ucontext_ptr = ucontext_ptr as *mut ucontext;
     let ucontext = unsafe { ucontext_ptr.as_mut().expect("ucontext is set") } ;
@@ -426,9 +426,9 @@ extern "C" fn regmap_impl(_signum: i32, siginfo_ptr: *mut siginfo_sigfault_t, uc
     // of the following address, so rip must advance before any emulation occurs.
     ucontext.uc_mcontext.rip = ucontext.uc_mcontext.rip.wrapping_add((0 + instr.len()).to_linear() as u64);
 
-    // lock prefixes on regmap addresses can be ignored: the memory access wants a register,
+    // lock prefixes on of addresses can be ignored: the memory access wants a register,
     // register operations are atomic, and the thread is paused while we handle the signal.
-    // functionally, every `regmap`'d operation is "locked".
+    // functionally, every `of`'d operation is "locked".
     use yaxpeax_x86::long_mode::Opcode;
 
     if instr.operand_count() == 0 {
@@ -438,7 +438,7 @@ extern "C" fn regmap_impl(_signum: i32, siginfo_ptr: *mut siginfo_sigfault_t, uc
     };
 
     // x86 has at most one memory operand, find it and emulate the instruction with the appropriate
-    // `regmap`'d register swapped in.
+    // `of`'d register swapped in.
     match instr.opcode() {
         Opcode::MOV => {
             ucontext.do_binop(&instr, addr, |ctx, _x, y| {
@@ -747,35 +747,35 @@ extern "C" fn regmap_impl(_signum: i32, siginfo_ptr: *mut siginfo_sigfault_t, uc
 
 mod predicate {
     pub(crate) fn above(flags: u64) -> bool {
-        flags & (crate::regmap::CF | crate::regmap::ZF) == 0
+        flags & (crate::of::CF | crate::of::ZF) == 0
     }
     pub(crate) fn below(flags: u64) -> bool {
-        flags & crate::regmap::CF != 0
+        flags & crate::of::CF != 0
     }
     pub(crate) fn greater(flags: u64) -> bool {
-        let bits = flags & (crate::regmap::SF | crate::regmap::OF);
-        bits & crate::regmap::ZF == 0 && (bits == 0 || bits == crate::regmap::SF | crate::regmap::OF)
+        let bits = flags & (crate::of::SF | crate::of::OF);
+        bits & crate::of::ZF == 0 && (bits == 0 || bits == crate::of::SF | crate::of::OF)
     }
     pub(crate) fn greater_equal(flags: u64) -> bool {
-        let bits = flags & (crate::regmap::SF | crate::regmap::OF);
-        bits == 0 || bits == crate::regmap::SF | crate::regmap::OF
+        let bits = flags & (crate::of::SF | crate::of::OF);
+        bits == 0 || bits == crate::of::SF | crate::of::OF
     }
     pub(crate) fn overflow(flags: u64) -> bool {
-        flags & crate::regmap::OF != 0
+        flags & crate::of::OF != 0
     }
     pub(crate) fn parity(flags: u64) -> bool {
-        flags & crate::regmap::PF != 0
+        flags & crate::of::PF != 0
     }
     pub(crate) fn signed(flags: u64) -> bool {
-        flags & crate::regmap::SF != 0
+        flags & crate::of::SF != 0
     }
     pub(crate) fn zero(flags: u64) -> bool {
-        flags & crate::regmap::ZF != 0
+        flags & crate::of::ZF != 0
     }
 }
 
 pub mod registers {
-    use crate::regmap::RegU64;
+    use crate::of::RegU64;
     /// a memory reference for the `rax` register.
     pub static RAX: RegU64 = RegU64::new(0);
     /// a memory reference for the `rcx` register.
@@ -833,7 +833,7 @@ pub unsafe extern "C" fn map_registers() {
     let mut sa = sa.assume_init();
     libc::sigemptyset(&mut sa.sa_mask as *mut libc::sigset_t);
     sa.sa_flags = libc::SA_SIGINFO | libc::SA_RESTART | libc::SA_ONSTACK;
-    sa.sa_sigaction = regmap_impl as usize;
+    sa.sa_sigaction = of_impl as usize;
 
     libc::sigaction(libc::SIGSEGV, &sa as *const libc::sigaction, core::ptr::null_mut());
     libc::sigaction(libc::SIGBUS, &sa as *const libc::sigaction, core::ptr::null_mut());

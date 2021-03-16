@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "regmap"
+name = "of"
 version = "0.1.0"
 dependencies = [
  "libc",
@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "regmap-static"
+name = "of-static"
 version = "0.1.0"
 dependencies = [
  "libc",
